@@ -1,0 +1,14 @@
+[Unit]
+Description=Cameron trading dashboard (localhost:8787)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/cameron
+ExecStart=/opt/cameron/.venv/bin/python -u dashboard.py
+Restart=always
+RestartSec=60
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.cameron.dashboard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/qfu/cameron/.venv/bin/python</string>
+    <string>-u</string>
+    <string>dashboard.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/qfu/cameron</string>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>60</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/qfu/cameron/dashboard.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/qfu/cameron/dashboard.log</string>
+</dict>
+</plist>

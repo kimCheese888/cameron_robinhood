@@ -1,0 +1,13 @@
+# secrets — NEVER commit
+.env
+.rh_tokens.json
+
+# runtime data & state
+*.csv
+*.log
+*.jsonl
+.autotrader.lock
+nohup.out
+
+__pycache__/
+.venv/

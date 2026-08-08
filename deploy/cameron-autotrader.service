@@ -1,0 +1,15 @@
+[Unit]
+Description=Cameron ORB autotrader (Alpaca paper)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/cameron
+ExecStart=/opt/cameron/.venv/bin/python -u autotrader.py
+Restart=always
+RestartSec=60
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
