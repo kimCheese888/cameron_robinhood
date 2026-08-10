@@ -220,19 +220,28 @@ def shadow_arm(day, symbols, cfg):
     return armed
 
 
-def _breakout_vol_ok(sym, avg_vol, mult):
+def _breakout_vol(sym, avg_vol):
+    """Measured breakout-minute volume vs the opening-range average.
+    Returns (recent, avg_vol, nbars, why): `recent` is the max 1-min
+    volume in the last 2 completed bars, or None when the datum is
+    missing (`why` says which case). Pure measurement — no decision."""
     if not avg_vol:
-        return False
+        return (None, avg_vol, 0, "no_avg_vol")
     try:
         end = now_et()
         rb = rh.bars(sym, (end - timedelta(minutes=3)).isoformat(),
                      end.isoformat())
         if not rb:
-            return False
+            return (None, avg_vol, 0, "no_bars")
         recent = max(float(b.get("volume") or 0) for b in rb[-2:])
-        return recent >= mult * avg_vol
-    except Exception:
-        return False
+        return (recent, avg_vol, len(rb), "ok")
+    except Exception as e:
+        return (None, avg_vol, 0, f"err:{str(e)[:40]}")
+
+
+def _breakout_vol_ok(sym, avg_vol, mult):
+    recent, avg_vol, _, _ = _breakout_vol(sym, avg_vol)
+    return recent is not None and recent >= mult * avg_vol
 
 
 def _dip_signal(bars):
@@ -565,20 +574,35 @@ def run_session(day):
             if now_et() < bar_end:
                 continue
             del armed[sym]  # decision point — one shot per symbol
-            if not _breakout_vol_ok(sym, info["avg_vol"], LIVE_VOL_X):
+            # measure once; the boolean below is byte-identical to
+            # _breakout_vol_ok — the extra fields are diagnostics only
+            recent, avg_vol, nbars, why = _breakout_vol(sym, info["avg_vol"])
+            need = (LIVE_VOL_X * avg_vol) if avg_vol else None
+            ratio = (recent / avg_vol) if (recent is not None and avg_vol) \
+                else None
+            vol_ok = recent is not None and recent >= LIVE_VOL_X * avg_vol
+            would_entry = round(px + ENTRY_SLIP, 2)
+            if not vol_ok:
+                detail = (f"breakout vol {recent:.0f} vs need {need:.0f} "
+                          f"({ratio:.2f}x, want {LIVE_VOL_X}x OR avg "
+                          f"{avg_vol:.0f})" if recent is not None else
+                          f"breakout volume unavailable ({why})")
                 journal.event("trigger.veto",
-                              f"{sym}: breakout minute below {LIVE_VOL_X}x "
-                              "OR volume — false-breakout filter says pass",
-                              symbol=sym, avg_vol=info["avg_vol"])
+                              f"{sym}: {detail} — false-breakout filter "
+                              "says pass", symbol=sym, avg_vol=avg_vol,
+                              recent_vol=recent, need=need, ratio=ratio,
+                              nbars=nbars, why=why, last=px,
+                              would_entry=would_entry, or_high=info["hi"])
                 continue
             entry = round(px + ENTRY_SLIP, 2)
             stop = round(max(info["lo"], entry - STOP_DIST_MAX), 2)
             journal.event("trigger",
                           f"{sym}: VOLUME-CONFIRMED break of {info['hi']} "
-                          f"-> buy {entry} (last {px}+{ENTRY_SLIP}), "
-                          f"stop {stop}", symbol=sym, last=px,
-                          or_high=info["hi"], or_low=info["lo"],
-                          entry=entry, stop=stop)
+                          f"({ratio:.2f}x OR avg vol) -> buy {entry} "
+                          f"(last {px}+{ENTRY_SLIP}), stop {stop}",
+                          symbol=sym, last=px, or_high=info["hi"],
+                          or_low=info["lo"], entry=entry, stop=stop,
+                          recent_vol=recent, avg_vol=avg_vol, ratio=ratio)
             if try_call(executor.buy, sym, entry, stop):
                 entries += 1
             if entries >= MAX_ENTRIES_PER_DAY:
