@@ -165,6 +165,19 @@ SHADOW_VARIANTS = {
     # Ross's bread-and-butter: don't chase the break — buy the first dip
     # back to the range high, invalidate if the dip loses the range low
     "orb5-dip":    {"range_end": (9, 35), "partial": True, "dip": True},
+    # --- 2026-08-12 experiments: the audit found entry mechanics (not
+    # selection or the filters) are the weak link. These probe fixes:
+    # like live volx2 but fill at a range-high limit instead of chasing
+    # the post-confirmation print (the $0.04 that cost us TP1 on WLDS)
+    "volx2-nochase": {"range_end": (9, 35), "partial": True,
+                      "vol_x": 2.0, "nochase": True},
+    # looser volume gate — does 1.5x keep most of the protection while
+    # letting live actually participate (2x traded once in two weeks)?
+    "volx2-1.5x":    {"range_end": (9, 35), "partial": True, "vol_x": 1.5},
+    # the TRUE Ross micro-pullback: dip below the range high then buy the
+    # reclaim, stop at the pullback low (tighter than orb5-dip's OR-low)
+    "micro-dip":     {"range_end": (9, 35), "partial": True,
+                      "dip": True, "micro": True},
 }
 SHADOW_SLIP = 0.02          # assumed fill slippage vs trigger print
 SHADOW_RISK = 100.0         # same $ risk as live, for comparable P&L
@@ -647,9 +660,21 @@ def run_session(day):
                                       "lost the range low — setup dead",
                                       variant=name, symbol=sym)
                         continue
-                    if px > info["hi"] + 0.01:
-                        continue  # still extended; keep waiting
-                    # first dip has reached the range high: buy it
+                    if cfg.get("micro"):
+                        # Ross micro-pullback: dip below the range high, then
+                        # buy the reclaim; stop goes at the pullback low
+                        if px <= info["hi"]:
+                            info["dipped"] = True
+                            info["pull_low"] = min(
+                                info.get("pull_low", px), px)
+                            continue  # still pulling back
+                        if not info.get("dipped"):
+                            continue  # extended; hasn't pulled back yet
+                        # dipped, now reclaiming the range high: buy it
+                    else:
+                        if px > info["hi"] + 0.01:
+                            continue  # still extended; keep waiting
+                        # first dip reached the range high: buy it
                 elif px <= info["hi"]:
                     continue
                 st["armed"].pop(sym)  # one shot, like live
@@ -660,8 +685,12 @@ def run_session(day):
                                   "— no confirmation", variant=name,
                                   symbol=sym)
                     continue
-                entry = round(px + SHADOW_SLIP, 2)
-                stop = round(max(info["lo"], entry - STOP_DIST_MAX), 2)
+                base = info["hi"] if cfg.get("nochase") else px
+                entry = round(base + SHADOW_SLIP, 2)
+                stop_base = info.get("pull_low") if cfg.get("micro") \
+                    else info["lo"]
+                stop = round(max(stop_base or info["lo"],
+                                 entry - STOP_DIST_MAX), 2)
                 risk = entry - stop
                 if risk < executor.MIN_STOP_DIST:
                     continue
