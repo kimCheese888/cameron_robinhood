@@ -57,14 +57,29 @@ def our_watchlist(day):
     return syms
 
 
+def match_symbol(sym, text):
+    """How Ross names `sym`, if at all: None | 'exact' | 'fuzzy'.
+
+    YouTube auto-captions mangle tickers — JWEL -> "Jwell", ZJYL ->
+    "Zjy L", SCKT -> "Seckt". `exact` is a whole-word case-insensitive
+    hit; `fuzzy` tolerates spaces between the letters and trailing extra
+    letters, anchored at a word start so we don't match a ticker buried
+    inside an English word (NAMI must not hit "dyNAMIc")."""
+    if re.search(rf"\b{re.escape(sym)}\b", text, re.IGNORECASE):
+        return "exact"
+    # letters separated by optional whitespace, anchored at a word start;
+    # no trailing boundary so "Jwell" still matches JWEL. Skip <3-char
+    # symbols — too short to fuzzy-match without false positives.
+    if len(sym) >= 3:
+        pat = r"\b" + r"\s*".join(re.escape(c) for c in sym)
+        if re.search(pat, text, re.IGNORECASE):
+            return "fuzzy"
+    return None
+
+
 def find_overlap(transcript, symbols):
-    """Which of `symbols` Ross names verbatim (whole-word, case-sensitive).
-    Reliable: our symbols are known-valid tickers."""
-    hits = []
-    for s in symbols:
-        if re.search(rf"\b{re.escape(s)}\b", transcript):
-            hits.append(s)
-    return hits
+    """Which of `symbols` Ross names (exact or caption-fuzzy)."""
+    return [s for s in symbols if match_symbol(s, transcript)]
 
 
 def extract_ross_tickers(transcript):
@@ -83,6 +98,7 @@ def extract_ross_tickers(transcript):
 def compare(transcript, day, video_id="", title="", symbols=None):
     ours = list(symbols) if symbols is not None else our_watchlist(day)
     overlap = find_overlap(transcript, ours)
+    fuzzy = [s for s in ours if match_symbol(s, transcript) == "fuzzy"]
     ross = extract_ross_tickers(transcript)
     our_only = [s for s in ours if s not in overlap]
     ross_only = [s for s in ross if s not in ours]
@@ -90,6 +106,7 @@ def compare(transcript, day, video_id="", title="", symbols=None):
         "date": day, "video_id": video_id, "title": title,
         "our_watchlist": ours,
         "overlap": overlap,
+        "overlap_fuzzy": fuzzy,  # matched only via caption-tolerant match
         "our_only": our_only,
         "ross_candidates": ross,
         "ross_only_topN": ross_only[:15],
@@ -149,7 +166,9 @@ def main():
     print(f"=== Ross vs bot · {result['date']} ===")
     print(f"video : {result['title']} ({result['video_id']})")
     print(f"our watchlist   : {result['our_watchlist'] or '(none)'}")
-    print(f"OVERLAP         : {result['overlap'] or '(none)'}")
+    fuzzy = result.get("overlap_fuzzy") or []
+    marked = [f"{s}~" if s in fuzzy else s for s in result["overlap"]]
+    print(f"OVERLAP         : {marked or '(none)'}  (~ = caption-fuzzy)")
     print(f"our-only        : {result['our_only'] or '(none)'}")
     print(f"ross candidates : {result['ross_candidates'][:15]}")
     print(f"-> appended {COMPARE_CSV.name} + ross.compare event")

@@ -8,7 +8,8 @@
 | ID | 项目 | 状态 | 备注 |
 |---|---|---|---|
 | T0 | `trigger.veto` 量能埋点(记 recent_vol/need/ratio/why/would_entry) | 🟢 | 2026-08-10 上线;当天验证 LOFF 1.34× / SPCH 0.49× 均 `why=ok`,真低量非数据延迟,过滤器正确避开两笔亏损 |
-| T9a | 每日 Ross 对比工作流(`ross_compare.py`) | 🟢 | 浏览器抓字幕→对比 watchlist;2026-08-10 首跑,重叠=NAMI |
+| T9a | 每日 Ross 对比工作流(`ross_compare.py`) | 🟢 | 浏览器抓字幕→对比 watchlist;8/10 重叠=NAMI,8/11 重叠=STKH+JWEL(JWEL 是 Ross 当天最赚的 +$61k) |
+| T11 | 匹配容忍字幕拼写变形(Jwell=JWEL、Zjy L=ZJYL) | 🟢 | `match_symbol` 加 exact/fuzzy 两级,防误配(NAMI 不进 dyNAMIc);6 单测通过 |
 
 ## P1 · 最高优先(证据最强:忠实度 + 真实盈亏同时指向)
 
@@ -30,7 +31,7 @@
 |---|---|---|---|---|
 | T5 | 排查 `hod-dip` 一个月 0 报警 | 第二雷达从未触发,可能扫描没返回或有 bug | `rh.hod_tickers()` `autotrader.hod_poll()` | 🔴 建议先加诊断埋点(类比 T0) |
 | T9 | 加「衰竭/背面」过滤,别追已暴涨完的票 | Ross 明确回避暴涨后的"背面";2026-08-10 我们把 NAMI 放回 watchlist,它开盘即熄火(OR高 3.525 ≪ 盘前 4.29) | `scanner.py` | 🔴 源自 Ross 对比 |
-| T10 | 查扫描器为何漏掉 Ross 的重点票 ZJYL | 他周一唯一重点盯的票我们没选到(float ~20M 卡上限?) | `scanner.py` FLOAT_MAX / gap 条件 | 🔴 源自 Ross 对比 |
+| T10 | ~~查扫描器为何漏掉 ZJYL~~ | 8/11 视频里 Ross 自己也**因 float 太高跳过 ZJYL** —— 我们的 float 过滤方向是对的,漏掉它是对的 | — | ⚪ 降级/关闭:验证了 float 过滤 |
 | T6 | 收紧止损上限(0.50 → 更紧,靠拢 Ross ≤15¢) | 宽止损→薄票上仓位偏大 | `autotrader.py STOP_DIST_MAX` | ⚪ 需回测验证影响 |
 | T7 | 降 `account.anomaly` 频率(Alpaca 偶返 last_equity=0) | 一天 78 条,虽有本地兜底但偏频 | `executor.py daily_pnl()` | ⚪ 观察 |
 | T8 | 流通盘上限 20M → 收紧靠拢 Ross <10M | 现在会放进中盘 | `scanner.py FLOAT_MAX` | ⚪ 需回测验证 |

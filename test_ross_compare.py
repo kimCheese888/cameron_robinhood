@@ -41,6 +41,22 @@ def test_extract_excludes_jargon():
         assert junk not in tickers, f"{junk} should be stoplisted"
 
 
+def test_fuzzy_matches_mangled_caption():
+    # YouTube auto-captions mangle tickers: JWEL -> "Jwell", STKH clean
+    t = "we've got Jwell, Chinese company. And STKH was Israeli."
+    assert rc.match_symbol("JWEL", t) == "fuzzy"
+    assert rc.match_symbol("STKH", t) == "exact"
+    overlap = rc.find_overlap(t, ["STKH", "JWEL", "WYHG", "XHLD"])
+    assert set(overlap) == {"STKH", "JWEL"}
+
+
+def test_fuzzy_no_false_positive_inside_word():
+    # NAMI must NOT match inside "dynamic" / "dynamite"
+    assert rc.match_symbol("NAMI", "this is a very dynamic dynamite market") is None
+    # short symbols are not fuzzy-matched at all
+    assert rc.match_symbol("MB", "number of times") is None
+
+
 def test_compare_shape():
     r = rc.compare(TRANSCRIPT, "2026-08-10", "l7Z5aqS4zpk", "ONE Stock",
                    symbols=OUR_WATCHLIST)
