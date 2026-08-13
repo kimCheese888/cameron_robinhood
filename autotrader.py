@@ -153,7 +153,13 @@ def last_price(symbol):
 # The live strategy (5-min ORB, half@1R/half@2R) trades the paper account;
 # these run on identical real-time quotes with simulated fills so results
 # are attributable per-variant. Completed trades -> variants.csv + journal.
-LIVE_VOL_X = 2.0  # live entries need the breakout minute >= 2x OR volume
+# Per-instance live config (env-overridable for the multi-account paper
+# services; defaults keep the primary volx2 instance byte-for-byte the same)
+LIVE_VOL_X = float(os.environ.get("CAMERON_VOL_X", "2.0"))
+LIVE_NOCHASE = os.environ.get("CAMERON_NOCHASE") == "1"   # fill at OR-high limit
+LIVE_ONLY = os.environ.get("CAMERON_LIVE_ONLY") == "1"    # skip shadows + hod
+INSTANCE = os.environ.get("CAMERON_INSTANCE", "")
+# live entries need the breakout minute >= LIVE_VOL_X x OR volume
 # (backtest 92 gap days: this filter took win rate 58% -> 80%, avg R
 # +0.07 -> +0.44 — the volume-confirmed variant was promoted to live on
 # 2026-07-22 and the unfiltered rule demoted to shadow "orb5-plain")
@@ -181,7 +187,7 @@ SHADOW_VARIANTS = {
 }
 SHADOW_SLIP = 0.02          # assumed fill slippage vs trigger print
 SHADOW_RISK = 100.0         # same $ risk as live, for comparable P&L
-VARIANTS_CSV = Path(__file__).parent / "variants.csv"
+VARIANTS_CSV = Path(__file__).parent / ("variants" + INSTANCE + ".csv")
 
 # --- hod-dip: intraday HOD-momo alerts + micro-pullback entry -----------
 # Second radar layer (Ross's "HOD Momo" scanner). The RH server-side scan
@@ -330,7 +336,9 @@ def try_call(fn, *args):
 
 def run_session(day):
     journal.event("session.start", f"ORB session {day} — strategy config",
-                  day=str(day), live="orb5-volx2",
+                  day=str(day),
+                  live=("orb5-nochase" if LIVE_NOCHASE
+                        else "orb5-volx%g" % LIVE_VOL_X),
                   live_vol_x=LIVE_VOL_X,
                   hod="hod-dip paper orders (tag hod-, "
                       f"max {HOD_MAX_ENTRIES}/day)",
@@ -427,7 +435,7 @@ def run_session(day):
 
     shadow = {}
     hod = None
-    if rh.available():
+    if rh.available() and not LIVE_ONLY:
         shadow = {name: {"cfg": cfg, "armed": {}, "open": {},
                          "armed_done": False}
                   for name, cfg in SHADOW_VARIANTS.items()}
@@ -607,7 +615,9 @@ def run_session(day):
                               nbars=nbars, why=why, last=px,
                               would_entry=would_entry, or_high=info["hi"])
                 continue
-            entry = round(px + ENTRY_SLIP, 2)
+            # nochase instances fill at an OR-high limit instead of chasing
+            # the post-confirmation print (the $0.04 that cost WLDS its TP1)
+            entry = round((info["hi"] if LIVE_NOCHASE else px) + ENTRY_SLIP, 2)
             stop = round(max(info["lo"], entry - STOP_DIST_MAX), 2)
             journal.event("trigger",
                           f"{sym}: VOLUME-CONFIRMED break of {info['hi']} "
@@ -759,7 +769,8 @@ def run_session(day):
 
 def main():
     # single-instance lock: a second copy multiplies every position
-    lock = open(Path(__file__).parent / ".autotrader.lock", "w")
+    lock = open(Path(__file__).parent / (".autotrader" + INSTANCE + ".lock"),
+                "w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:

@@ -28,6 +28,12 @@ import journal
 
 ROOT = Path(__file__).parent
 
+# Multi-account support: an extra instance sets CAMERON_ACCOUNT (key-env
+# suffix, e.g. "_15X") and CAMERON_INSTANCE (isolated state-file suffix).
+# Both default to "" so the primary volx2 instance is unchanged.
+ACCOUNT = os.environ.get("CAMERON_ACCOUNT", "")
+INSTANCE = os.environ.get("CAMERON_INSTANCE", "")
+
 
 def reject(reason, **data):
     journal.event("order.reject", reason, **data)
@@ -53,8 +59,8 @@ def api(method, path, **payload):
     r = requests.request(
         method, f"{base}{path}",
         headers={
-            "APCA-API-KEY-ID": os.environ["APCA_API_KEY_ID"],
-            "APCA-API-SECRET-KEY": os.environ["APCA_API_SECRET_KEY"],
+            "APCA-API-KEY-ID": os.environ["APCA_API_KEY_ID" + ACCOUNT],
+            "APCA-API-SECRET-KEY": os.environ["APCA_API_SECRET_KEY" + ACCOUNT],
         },
         json=payload if method in ("POST", "PATCH") else None,
         params=payload if method == "GET" else None,
@@ -69,7 +75,7 @@ class Breaker(Exception):
     """Daily max loss hit — distinct from transient errors."""
 
 
-BASELINE = ROOT / ".day_baseline.json"
+BASELINE = ROOT / (".day_baseline" + INSTANCE + ".json")
 
 
 def daily_pnl():

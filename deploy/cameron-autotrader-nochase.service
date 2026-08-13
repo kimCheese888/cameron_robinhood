@@ -1,0 +1,20 @@
+[Unit]
+Description=Cameron paper volx2-nochase (isolated Alpaca paper account)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/cameron
+Environment=PYTHONUNBUFFERED=1
+Environment=CAMERON_INSTANCE=_nochase
+Environment=CAMERON_ACCOUNT=_NOCHASE
+Environment=CAMERON_VOL_X=2.0
+Environment=CAMERON_NOCHASE=1
+Environment=CAMERON_LIVE_ONLY=1
+ExecStart=/opt/cameron/.venv/bin/python -u autotrader.py
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

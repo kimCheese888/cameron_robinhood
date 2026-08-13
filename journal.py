@@ -8,10 +8,14 @@ explanation of WHY, "data": {machine-readable values used in the decision}}
 """
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
-PATH = Path(__file__).parent / "events.jsonl"
+# extra instances (see executor.ACCOUNT) log to their own events file so
+# the multi-account services never clobber each other's journal
+PATH = (Path(__file__).parent
+        / ("events" + os.environ.get("CAMERON_INSTANCE", "") + ".jsonl"))
 
 
 def event(etype, msg="", **data):
