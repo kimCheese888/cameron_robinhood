@@ -11,14 +11,16 @@
 | T9a | 每日 Ross 对比工作流(`ross_compare.py`) | 🟢 | 浏览器抓字幕→对比 watchlist;8/10 重叠=NAMI,8/11 重叠=STKH+JWEL(JWEL 是 Ross 当天最赚的 +$61k) |
 | T11 | 匹配容忍字幕拼写变形(Jwell=JWEL、Zjy L=ZJYL) | 🟢 | `match_symbol` 加 exact/fuzzy 两级,防误配(NAMI 不进 dyNAMIc);6 单测通过 |
 | T12 | 过滤器机会成本 + 入场方式对比(`filter_costs.py`/`entry_compare.py`) | 🟢 | 用真 RH 数据:①三道门整体**净保护**(躲 $1686 > 错过 $1368);量能门明确有效(净省 $296)②突破入场稳跑赢回踩(全池 +3.16R vs −7.82R)—— **回踩机制上漏 runner** |
-| T13 | 加 3 个新影子变体(volx2-nochase / volx2-1.5x / micro-dip) | 🟢 | 2026-08-12;sim 7 场景 PASS;修入场机制而非选股。攒样本中,择优走多账户 paper 验证 |
+| T13 | 加 3 个新影子变体(volx2-nochase / volx2-1.5x / micro-dip) | 🟢 | 2026-08-12;sim 7 场景 PASS;修入场机制而非选股 |
+| T15 | 回测新变体做大样本粗筛(扩展 `backtest.py`) | 🟢 | 400 跳空日:**volx2-1.5x 胜出**(47笔/77%/+22.3R,比 2× 多交易且总R更高);**micro-dip 否决**(73笔/16%/−0.83R,紧止损被噪声扫穿——又一个小样本运气);nochase 回测测不了(=volx2) |
 
 ## P1 · 最高优先
 
 | ID | 项目 | 为什么 | 涉及 | 状态 |
 |---|---|---|---|---|
 | T1 | ~~把 `orb5-dip` 转实盘~~ | +$93 是 **9 笔小样本运气**;更大回放(T12)里回踩全池 −7.82R、机制上漏 runner,且止损并不比突破紧 | — | ❌ **否决**,不转正 |
-| T14 | 多账户 paper 验证:一策略一账户(冠军影子→真实成交) | 单账户多策略会持仓合并/抢仓/熔断连坐;真实滑点只有 paper 能暴露(WLDS 的 $0.04) | `executor`/`autotrader` 读多套 key | 🔴 **等你开 Alpaca paper 账户 + 给 key**,我再改多账户代码 |
+| T14 | 多账户 paper:先上 **volx2-1.5x**(回测冠军)+ **volx2-nochase**(回测盲区,须真实成交验) | 单账户多策略会持仓合并/抢仓/熔断连坐;真实滑点只有 paper 能暴露(WLDS 的 $0.04) | `executor`/`autotrader` 读多套 key | 🔴 **等你开 Alpaca paper 账户 + 给 key**,我再改多账户代码 |
+| T16 | micro-dip:回测否决后从影子里退役(或留作反面对照) | 大样本 16% 胜率,继续占对照位意义不大 | `autotrader.py SHADOW_VARIANTS` | ⚪ 可选 |
 
 ## P2 · 中优先
 

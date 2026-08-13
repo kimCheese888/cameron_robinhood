@@ -129,12 +129,16 @@ def run_trade(bars, i, entry, stop, partial=True):
 def strategies(bars):
     """Yield (name, pnl, entry, kind) for each strategy on this day."""
     out = []
-    for name, rng_min, partial, vol_x, dip in (
-            ("orb5", 5, True, None, False),
-            ("orb5-full2R", 5, False, None, False),
-            ("orb15", 15, True, None, False),
-            ("orb5-volx2", 5, True, 2.0, False),
-            ("orb5-dip", 5, True, None, True)):
+    for name, rng_min, partial, vol_x, dip, micro in (
+            ("orb5", 5, True, None, False, False),
+            ("orb5-full2R", 5, False, None, False, False),
+            ("orb15", 15, True, None, False, False),
+            ("orb5-volx2", 5, True, 2.0, False, False),
+            ("orb5-dip", 5, True, None, True, False),
+            # new experiments (nochase is identical to volx2 here — its
+            # edge is a live-only chase artifact the backtest can't model)
+            ("volx2-1.5x", 5, True, 1.5, False, False),
+            ("micro-dip", 5, True, None, True, True)):
         orange = opening_range(bars, rng_min)
         if not orange:
             continue
@@ -154,22 +158,33 @@ def strategies(bars):
             continue
         if dip:
             # after the break, wait for a retest of the range high;
-            # invalidated if price loses the range low first
+            # invalidated if price loses the range low first. micro-dip
+            # tracks the pullback low and stops there (tighter than OR-low)
             entry_i = None
-            for i in range(bi, len(bars)):
+            pull_low = None
+            for i in range(bi + 1, len(bars)):
                 if bars[i]["low"] <= lo:
                     break
-                if i > bi and bars[i]["low"] <= hi + 0.01:
+                if micro:
+                    if bars[i]["low"] <= hi:  # pulling back below range high
+                        pull_low = min(pull_low if pull_low is not None
+                                       else bars[i]["low"], bars[i]["low"])
+                    if pull_low is not None and bars[i]["high"] > hi:
+                        entry_i = i  # reclaim after a dip
+                        break
+                elif bars[i]["low"] <= hi + 0.01:
                     entry_i = i
                     break
             if entry_i is None:
                 out.append((name, None, None, "no_retest"))
                 continue
             entry = round(hi + 0.01 + SLIP, 2)
+            stop_base = pull_low if micro else lo
             bi = entry_i
         else:
             entry = round(min(bars[bi]["high"], hi + 0.01) + SLIP, 2)
-        stop = round(max(lo, entry - STOP_DIST_MAX), 2)
+            stop_base = lo
+        stop = round(max(stop_base, entry - STOP_DIST_MAX), 2)
         if entry - stop < MIN_STOP:
             out.append((name, None, None, "stop_too_tight"))
             continue
@@ -222,7 +237,8 @@ def main():
     # summary
     print(f"\n{'strategy':<14}{'trades':>7}{'win%':>7}{'avgR':>7}"
           f"{'totR':>8}   exits")
-    for name in ("orb5", "orb5-full2R", "orb15", "orb5-volx2", "orb5-dip"):
+    for name in ("orb5", "orb5-full2R", "orb15", "orb5-volx2", "orb5-dip",
+                 "volx2-1.5x", "micro-dip"):
         t = [r for r in rows if r["strategy"] == name and r["r"] != ""]
         nt = [r for r in rows if r["strategy"] == name and r["r"] == ""]
         if not t:
