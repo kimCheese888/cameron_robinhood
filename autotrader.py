@@ -25,6 +25,7 @@ import requests
 
 import executor
 import journal
+import notify
 import rh
 import scanner
 
@@ -334,6 +335,29 @@ def try_call(fn, *args):
         return False
 
 
+def _live_realized(day, sym):
+    """Realized $ on a symbol today from real fills (matched buy vs sell),
+    for the exit alert. Best-effort — returns None if it can't be computed
+    (e.g. the sim broker has no activities endpoint)."""
+    try:
+        acts = executor.api("GET", "/v2/account/activities",
+                            activity_types="FILL", date=str(day))
+    except Exception:
+        return None
+    bq = bv = sq = sv = 0.0
+    for a in acts if isinstance(acts, list) else []:
+        if a.get("symbol") != sym:
+            continue
+        q, p = float(a["qty"]), float(a["price"])
+        if a["side"] == "buy":
+            bq += q; bv += q * p
+        else:
+            sq += q; sv += q * p
+    if bq and sq:
+        return (sv / sq - bv / bq) * min(bq, sq)
+    return None
+
+
 def run_session(day):
     journal.event("session.start", f"ORB session {day} — strategy config",
                   day=str(day),
@@ -351,6 +375,8 @@ def run_session(day):
     sleep_until(at(day, 9, 15))
     log("premarket scan...")
     watch = build_watchlist()
+    if watch:
+        notify.send(notify.watchlist(watch))
     if not watch:
         pos, orders = [], []
         try:
@@ -546,6 +572,7 @@ def run_session(day):
 
     ticks = 0
     fails = {}
+    live_open = set()  # live positions we've alerted an entry for
     while now_et() < cutoff and (armed or entries or resting
                                  or shadows_active() or hod_active()):
         ticks += 1
@@ -614,6 +641,7 @@ def run_session(day):
                               recent_vol=recent, need=need, ratio=ratio,
                               nbars=nbars, why=why, last=px,
                               would_entry=would_entry, or_high=info["hi"])
+                notify.send(notify.veto(sym, ratio))
                 continue
             # nochase instances fill at an OR-high limit instead of chasing
             # the post-confirmation print (the $0.04 that cost WLDS its TP1)
@@ -628,6 +656,8 @@ def run_session(day):
                           recent_vol=recent, avg_vol=avg_vol, ratio=ratio)
             if try_call(executor.buy, sym, entry, stop):
                 entries += 1
+                live_open.add(sym)
+                notify.send(notify.entry(sym, info["hi"], ratio, entry, stop))
             if entries >= MAX_ENTRIES_PER_DAY:
                 armed.clear()
                 journal.event("session.limit", "max entries "
@@ -749,6 +779,16 @@ def run_session(day):
             except (RuntimeError, requests.RequestException) as e:
                 journal.event("poll.error", f"manage failed, will retry: "
                               f"{str(e)[:120]}")
+            if live_open:  # alert any live position that has fully closed
+                try:
+                    held = {p["symbol"] for p in
+                            executor.api("GET", "/v2/positions")}
+                except Exception:
+                    held = live_open
+                for s in list(live_open):
+                    if s not in held:
+                        notify.send(notify.exit_(s, _live_realized(day, s)))
+                        live_open.discard(s)
         time.sleep(POLL_SECS)
 
     journal.event("session.cutoff", "time cutoff reached — flattening "
@@ -763,6 +803,9 @@ def run_session(day):
                 pass
             _shadow_close(name, sym, pos, px or pos["entry"], "cutoff", day)
     try_call(executor.flatten)
+    for s in list(live_open):  # cutoff closed these — alert the exit
+        notify.send(notify.exit_(s, _live_realized(day, s)))
+        live_open.discard(s)
     try_call(executor.status)
     journal.event("session.end", "session complete", entries=entries)
 
