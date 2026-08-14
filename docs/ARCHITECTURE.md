@@ -21,6 +21,9 @@ Alpaca IEX 备用。全流程写 `events.jsonl`,网页面板可视化。
 | `dashboard.py` | Flask 面板 `localhost:8787`,读 `events.jsonl` + Alpaca 状态 | `/api/state` `/api/chart` |
 | `backtest*.py` `sim.py` | 历史回测与模拟,用于策略验证/晋升决策 | — |
 | `ross_compare.py` | 每日把 watchlist 对比 Ross Cameron 视频点名的票(字幕靠浏览器抓,见 `docs/ROSS_COMPARE.md`) | `compare()` → `ross_compare.csv` + `ross.compare` 事件 |
+| `daily_report.py` | 收工后把三实例当天结果汇总推 Telegram(见 `docs/REPORTING.md`) | `build()` → Telegram |
+| `variant_scoreboard.py` | 影子变体累计战绩表(交易数/胜率/总R) | 读 `variants.csv` |
+| `filter_costs.py` / `entry_compare.py` | 一次性分析:过滤器机会成本 / 突破 vs 回踩入场 | 读 events + RH bars |
 
 ## 数据流
 
@@ -68,9 +71,15 @@ Alpaca IEX 备用。全流程写 `events.jsonl`,网页面板可视化。
 ## 部署与运行时
 
 - **systemd 服务**(Linux, `/opt/cameron`):
-  - `cameron-autotrader.service` → `autotrader.py`(`Restart=always`)
-  - `cameron-dashboard.service` → `dashboard.py`(`localhost:8787`)
-  - 单元文件源:`deploy/*.service`
+  - `cameron-autotrader.service` → 现役 volx2(默认账户)
+  - `cameron-autotrader-15x.service` → volx2-1.5x(账户 `_15X`,`CAMERON_*` 环境变量)
+  - `cameron-autotrader-nochase.service` → volx2-nochase(账户 `_NOCHASE`)
+  - `cameron-dashboard.service` → `dashboard.py`(`localhost:8787`,读现役实例)
+  - `cameron-report.timer` → 每交易日 15:20 UTC 发日报(见 `docs/REPORTING.md`)
+  - 单元文件源:`deploy/*.service` / `deploy/*.timer`
+- **多账户**:环境变量 `CAMERON_ACCOUNT`(key 后缀)/ `CAMERON_INSTANCE`(状态文件后缀)
+  / `CAMERON_VOL_X` / `CAMERON_NOCHASE` / `CAMERON_LIVE_ONLY`;默认空 = 现役实例不变。
+  每实例独立账户、独立熔断、独立 `events{后缀}.jsonl`。
 - **发布循环**:本地改 → `git push` → 服务器 `git pull` → `systemctl restart cameron-autotrader`
 - **面板访问**:SSH 隧道 `ssh -L 8787:localhost:8787 root@<host>`
 - **运行时文件**(均 gitignore,勿入库):
