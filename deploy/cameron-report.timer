@@ -1,0 +1,10 @@
+[Unit]
+Description=Fire the Cameron daily report after the session (15:20 UTC, Mon-Fri)
+
+[Timer]
+# 15:20 UTC = 11:20 ET, ~20 min after the 11:00 ET flatten/session-end
+OnCalendar=Mon-Fri *-*-* 15:20:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

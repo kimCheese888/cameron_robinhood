@@ -1,0 +1,7 @@
+[Unit]
+Description=Cameron daily post-session report -> Telegram
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/cameron
+ExecStart=/opt/cameron/.venv/bin/python daily_report.py
