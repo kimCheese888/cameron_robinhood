@@ -200,8 +200,18 @@ VARIANTS_CSV = Path(__file__).parent / ("variants" + INSTANCE + ".csv")
 # so bracket mechanics/fills/slippage are exercised for real; risk shares
 # the account-wide -$300 breaker but has its own entry budget.
 HOD_VARIANT = "hod-dip"
-HOD_SCAN_EVERY_S = 300      # poll the server-side scan every 5 min
-HOD_START_HM = (9, 40)      # let the open shake out first
+# 2026-08-19: 0 hod.alert in a month of live polling (see docs/TODO.md T5).
+# Ross-vs-bot comparison on 2026-08-18 showed why: his intraday movers
+# (GNPX 7:05am, SXTC 8:30am, PFSA continuing from after-hours) all fire
+# well before 9:40, and "+3% in the last 5min" is a momentary condition
+# that a 5-min poll easily straddles and misses entirely. Tightened the
+# poll to catch the burst instead of stepping over it, and start scanning
+# right at the open instead of waiting 10 min; added hod.scan diagnostic
+# logging (recent silence gave no signal on whether it was even calling
+# the API) so a still-empty month after this change is real evidence,
+# not another guess.
+HOD_SCAN_EVERY_S = 90       # was 300 — 5min window / 5min poll = easy miss
+HOD_START_HM = (9, 32)      # was 9:40 — only lose the first 2 min of chop
 HOD_LAST_HM = (10, 30)      # no new alerts after this (cutoff needs runway)
 HOD_MAX_ALERTS = 6
 HOD_MAX_ENTRIES = 2         # real-order budget per day
@@ -495,6 +505,12 @@ def run_session(day):
                 journal.event("rh.error",
                               f"HOD scan failed: {str(e)[:100]}")
                 hits = []
+            # T5 diagnostic: log every poll, hit or not — a silent month
+            # gave no way to tell "scan never fires" from "scan runs and
+            # is empty" from "scan isn't being called at all"
+            journal.event("hod.scan", f"HOD scan: {len(hits)} raw hit(s) "
+                          f"{hits[:HOD_MAX_ALERTS] if hits else ''}",
+                          hits=hits, n=len(hits))
             for sym in hits:
                 if (sym in hod["seen"] or sym in watch_syms
                         or len(hod["seen"]) >= HOD_MAX_ALERTS):
