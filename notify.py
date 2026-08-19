@@ -59,3 +59,14 @@ def veto(sym, ratio):
 def exit_(sym, pnl):
     r = "" if pnl is None else "　<b>%+.0f$（%+.1fR）</b>" % (pnl, pnl / 100.0)
     return "\U0001F534 <b>%s 平仓</b>%s" % (link(sym), r)
+
+
+def hod_watch(sym, last):
+    px = "?" if last is None else last
+    return ("\U0001F440 <b>%s 盘中动能</b> @ %s\n新高附近放量触发第二雷达，"
+            "盯回踩确认入场" % (link(sym), px))
+
+
+def hod_entry(sym, entry, stop):
+    return ("✅ <b>买入 %s</b>（盘中动能回踩）@ %s\n"
+            "回踩后反包确认，止损 %s" % (link(sym), entry, stop))

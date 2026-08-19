@@ -531,6 +531,7 @@ def run_session(day):
                               "(+10% day, +3% last 5min) — watching for "
                               "the first pullback", symbol=sym,
                               last=q.get("last"))
+                notify.send(notify.hod_watch(sym, q.get("last")))
         for sym in list(hod["alerts"]):
             a = hod["alerts"][sym]
             age_min = (now - a["t0"]).total_seconds() / 60
@@ -585,6 +586,8 @@ def run_session(day):
                           entry=entry, stop=stop, entry_sig=entry_sig)
             if try_call(executor.buy, sym, entry, stop, None, "hod"):
                 hod["entries"] += 1
+                live_open.add(sym)
+                notify.send(notify.hod_entry(sym, entry, stop))
 
     ticks = 0
     fails = {}
