@@ -56,6 +56,11 @@ def veto(sym, ratio):
             % (link(sym), ratio or 0))
 
 
+def chase_veto(sym, px, hi):
+    return ("⛔ <b>%s 否决</b> — 量能确认时已经涨到 %s，追高超过箱顶 %s "
+            "太多，不追" % (link(sym), px, hi))
+
+
 def exit_(sym, pnl):
     r = "" if pnl is None else "　<b>%+.0f$（%+.1fR）</b>" % (pnl, pnl / 100.0)
     return "\U0001F534 <b>%s 平仓</b>%s" % (link(sym), r)

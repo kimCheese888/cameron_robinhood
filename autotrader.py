@@ -37,6 +37,9 @@ SPREAD_MAX = 0.20          # skip books wider than this
 RANGE_MAX_FRAC = 0.10      # skip if opening range > 10% of price
 STOP_DIST_MAX = 0.50       # cap risk distance even if range is wider
 ENTRY_SLIP = 0.03          # marketable limit: last price + this
+CHASE_MAX_FRAC = 0.5       # T2: veto if confirmed price > OR-high + this
+                           # fraction of the box range (don't chase a
+                           # breakout whose location is already gone)
 POLL_SECS = 15
 MANAGE_EVERY = 4           # manage/breaker check every N polls
 CUTOFF_HM = (11, 0)
@@ -661,6 +664,26 @@ def run_session(day):
                               nbars=nbars, why=why, last=px,
                               would_entry=would_entry, or_high=info["hi"])
                 notify.send(notify.veto(sym, ratio))
+                continue
+            # T2: don't chase past where the trade's edge is gone. Real
+            # evidence, not a guess — WFF (8/18) chased to 2.79 while
+            # volx2-1.5x got 2.50 same stock same day (+$60 vs -$37), and
+            # NBIZ (8/20) same story vs nochase's OR-high fill. If price
+            # has already run more than half the box's own range past the
+            # OR high by the time the volume bar confirms, the location is
+            # gone — same 0.5R cap hod_poll already uses for its pullback
+            # entries, applied here to the breakout entry.
+            box_range = info["hi"] - info["lo"]
+            if not LIVE_NOCHASE and px > info["hi"] + CHASE_MAX_FRAC * box_range:
+                journal.event("trigger.veto",
+                              f"{sym}: confirmed but price {px} already "
+                              f"{px - info['hi']:.2f} past OR high "
+                              f"{info['hi']} (>{CHASE_MAX_FRAC:.0%} of box "
+                              f"range {box_range:.2f}) — not chasing, "
+                              "location is gone", symbol=sym, last=px,
+                              or_high=info["hi"], or_low=info["lo"],
+                              reason="chase_too_far", ratio=ratio)
+                notify.send(notify.chase_veto(sym, px, info["hi"]))
                 continue
             # nochase instances fill at an OR-high limit instead of chasing
             # the post-confirmation print (the $0.04 that cost WLDS its TP1)
