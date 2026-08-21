@@ -19,7 +19,7 @@
 
 | ID | 项目 | 为什么 | 涉及 | 状态 |
 |---|---|---|---|---|
-| T18 | Robinhood 主雷达 gap 扫描(`scan_tickers`/`SCAN_ID`)自埋点以来(7/16 起,26 次)**贡献 0 只票,一次没有** | 2026-08-20 Ross 对比时顺手查的:今天 Ross 头号票 SGLY 我们压根没进 143 只候选池,查 `scan.rh_universe` 历史发现全是 `contributed 0`。等于这两个月主雷达(整合数据,该比 Alpaca IEX 准)一直是摆设,全靠 IEX movers/actives 兜底,选股质量被拖累。疑点:该 scan 用"当日涨幅/相对量(1d)"字段,9:15 ET 盘前跑时 RH 内部可能不算盘前数据,永远算出 0——跟 hod-dip(T5)是同一类"瞬时/时段错位"问题,但更严重、影响每天主选股。**需要在真实盘前时段(9:00-9:30 ET)手动跑 `rh.call("run_scan", scan_id=rh.SCAN_ID)` 实测确认**,不是收盘后能测的 | `rh.py scan_tickers()` `scanner.py get_universe()` | 🔴 待盘前实测 |
+| T18 | Robinhood 主雷达 gap 扫描(`scan_tickers`/`SCAN_ID`)自埋点以来(7/16 起,26 次)**贡献 0 只票,一次没有** | 2026-08-20 Ross 对比时顺手查的,2026-08-21 盘前实测排除了"盘前时段算不进去"的猜测:9:08 ET(盘前)`total_items=0`,9:33 ET(开盘 3 分钟后)**依然 0**。同一时刻我们自己的 Alpaca+IEX 扫描抓到了 BIVI(gap 56.1%、rvol 26.8、float 805万、价 2.06)—— **完全符合 RH 那个 scan 自己声明的四条过滤条件**(gap>10%/价2-20/rvol>5/float<20M),但 RH scan 还是 0。排除了"没有票达标"和"盘前数据算不进去"两种解释,说明 `SCAN_ID` 这个已保存的扫描本身可能是坏的/过期的/账号关联错了,不是时间点问题。**下一步**(未动手,等你过目):建 RH APP 里重新建一个同样条件的新 scan、拿新 scan_id 替换,或者直接找 RH 官方支持排查这个 scan_id | `rh.py scan_tickers()` `scanner.py get_universe()` | 🔴 根因缩小了,方案待定 |
 
 ## P1 · 最高优先
 
