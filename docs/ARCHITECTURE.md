@@ -24,6 +24,7 @@ Alpaca IEX 备用。全流程写 `events.jsonl`,网页面板可视化。
 | `daily_report.py` | 收工后把三实例当天结果汇总推 Telegram(见 `docs/REPORTING.md`) | `build()` → Telegram |
 | `variant_scoreboard.py` | 影子变体累计战绩表(交易数/胜率/总R) | 读 `variants.csv` |
 | `filter_costs.py` / `entry_compare.py` | 一次性分析:过滤器机会成本 / 突破 vs 回踩入场 | 读 events + RH bars |
+| `tg_approve.py` | 改动走 Telegram 确认(见 `docs/APPROVAL.md`) | `propose()` `check_approvals()` |
 
 ## 数据流
 

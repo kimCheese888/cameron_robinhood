@@ -7,6 +7,11 @@
 *.log
 *.jsonl
 .autotrader.lock
+.autotrader_15x.lock
+.autotrader_nochase.lock
+.day_baseline*.json
+.pending_proposals.json
+.tg_offset.json
 nohup.out
 
 __pycache__/
