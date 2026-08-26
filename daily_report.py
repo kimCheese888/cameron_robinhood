@@ -107,6 +107,11 @@ def decide(sym, evs, realized):
                 t.get("stop", "?"), res))
     if "trigger.veto" in typ:
         t = d("trigger.veto")
+        if t.get("reason") == "chase_too_far":
+            return ("⛔", "没买 — 量能确认了(%.2f×)，但确认时价格 %s 已经"
+                    "追出箱顶 %s 太多（超过箱体一半），追高幅度封顶，不追。"
+                    % (t.get("ratio", 0) or 0, t.get("last", "?"),
+                       t.get("or_high", "?")))
         return ("⛔", "没买 — 破了箱顶但突破量只有 %.2f×（需 2×），"
                 "当假突破否掉。" % (t.get("ratio", 0) or 0))
     if "arm.drop" in typ:
