@@ -45,6 +45,9 @@ DAILY_MAX_LOSS = 300.0      # circuit breaker: flatten + refuse new entries
 MAX_POSITIONS = 3           # 2 ORB slots + 1 for the hod-dip second radar
 MAX_SHARES = 4000           # sanity cap for tight stops
 MIN_STOP_DIST = 0.05        # reject stops tighter than this (noise)
+LIQUIDITY_MAX_FRAC = 0.03   # T4: cap order size at this fraction of the
+                            # breakout-minute volume (Ross: keep it under
+                            # 2-5% of 1-min volume so you're not the tape)
 
 
 def load_env():
@@ -121,12 +124,15 @@ def circuit_breaker():
     return a
 
 
-def buy(symbol, entry, stop, trigger=None, tag="orb"):
+def buy(symbol, entry, stop, trigger=None, tag="orb", recent_vol=None):
     """Split-bracket entry. With trigger set, places a resting stop-limit
     (server-side breakout trigger at `trigger`, fill capped at `entry`) —
     no polling latency. Without it, a plain marketable limit.
     `tag` prefixes client_order_ids so strategies stay attributable on
-    the shared paper account (orb-* = ORB live, hod-* = HOD second radar)."""
+    the shared paper account (orb-* = ORB live, hod-* = HOD second radar).
+    `recent_vol`: the breakout-minute volume, if the caller already
+    measured it (autotrader's `_breakout_vol`) — used only to cap size
+    (T4), never to reject the trade outright."""
     if entry <= stop:
         reject("entry must be above stop (long-only strategy)",
                symbol=symbol, entry=entry, stop=stop)
@@ -144,6 +150,17 @@ def buy(symbol, entry, stop, trigger=None, tag="orb"):
         reject(f"already in {symbol} — no adding", symbol=symbol)
 
     shares = min(int(RISK_PER_TRADE / risk), MAX_SHARES)
+    if recent_vol:
+        cap = int(recent_vol * LIQUIDITY_MAX_FRAC)
+        if cap < shares:
+            journal.event("size.liquidity_cap",
+                          f"{symbol}: {shares} sh wanted but capped to "
+                          f"{cap} sh ({LIQUIDITY_MAX_FRAC:.0%} of "
+                          f"{recent_vol:.0f} breakout-minute volume) — "
+                          "smaller position, not a bigger footprint on "
+                          "a thin tape", symbol=symbol, wanted=shares,
+                          capped_to=cap, recent_vol=recent_vol)
+            shares = cap
     half = shares // 2
     if half < 1:
         reject(f"{symbol}: position too small to split", symbol=symbol)
