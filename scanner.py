@@ -38,6 +38,12 @@ GAP_MIN_PCT = 10.0
 RVOL_MIN = 5.0
 FLOAT_MAX = 20_000_000   # Ross wants <10M; 20M cap still kills mid-caps
 MIN_TODAY_VOLUME = 30_000        # IEX feed only; ~2% of tape
+FADE_MAX_FRAC = 0.15    # T9: reject if price already faded >15% off
+                        # today's high by scan time — Ross avoids buying
+                        # the "backside" of a spike that already blew its
+                        # move; NAMI (2026-08-10) faded premarket $4.29 ->
+                        # opening-range high only $3.525 (-17.8%) and died
+                        # at the open — this would have caught it
 UNIVERSE_SIZE = 100
 CSV_PATH = ROOT / "signals.csv"
 
@@ -178,6 +184,16 @@ def scan():
             reject(sym, "volume_too_low", interesting=gapping,
                    volume=volume, gap_pct=round(gap, 1))
             continue
+        today_high = today.get("h")
+        if today_high and today_high > 0:
+            fade = (today_high - price) / today_high
+            if fade > FADE_MAX_FRAC:
+                # T9: already faded off today's high before we even built
+                # the opening range — Ross avoids buying the "backside"
+                reject(sym, "already_faded", interesting=True,
+                       today_high=today_high, price=price,
+                       fade_pct=round(fade * 100, 1), gap_pct=round(gap, 1))
+                continue
 
         q = s.get("latestQuote") or {}
         spread = (q["ap"] - q["bp"]) if q.get("ap") and q.get("bp") else None
