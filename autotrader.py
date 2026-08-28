@@ -574,8 +574,12 @@ def run_session(day):
                 px = None
             if px is None:
                 continue
-            risk_sig = entry_sig - stop_sig
-            if px > entry_sig + 0.5 * risk_sig:
+            # 2026-08-27: risk unit must match what sizing actually uses
+            # below (min(range, STOP_DIST_MAX)) — same fix as T2's ORB
+            # veto, same underlying bug (raw risk_sig let the effective
+            # cap loosen on wide pullbacks instead of tightening)
+            risk_unit = min(entry_sig - stop_sig, STOP_DIST_MAX)
+            if px > entry_sig + 0.5 * risk_unit:
                 # bar-close confirmation cost us the location — chasing
                 # >0.5R above the reclaim breaks the R math, let it go
                 journal.event("hod.veto", f"{sym}: price {px} ran >0.5R "
