@@ -696,7 +696,8 @@ def run_session(day):
                           symbol=sym, last=px, or_high=info["hi"],
                           or_low=info["lo"], entry=entry, stop=stop,
                           recent_vol=recent, avg_vol=avg_vol, ratio=ratio)
-            if try_call(executor.buy, sym, entry, stop):
+            if try_call(executor.buy, sym, entry, stop, None, "orb",
+                       recent):
                 entries += 1
                 live_open.add(sym)
                 notify.send(notify.entry(sym, info["hi"], ratio, entry, stop))
