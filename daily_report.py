@@ -125,6 +125,23 @@ def decide(sym, evs, realized):
     return ("·", "没进入候选（未布防）。")
 
 
+def side_entries(esuf, day):
+    """A side instance's (1.5x/nochase/...) own real trigger events for
+    `day` — each variant has its own volume threshold / entry mechanism
+    and can fire on a day/symbol the primary vetoed or never armed. Only
+    checking the primary's narrative silently drops these (real bug,
+    2026-08-28: 1.5x traded DAIC+WSHP on a day primary vetoed both and
+    the daily report said "0 trades across all 3 accounts")."""
+    evs = today_events(esuf, day)
+    out = []
+    for e in evs:
+        if e["type"] != "trigger":
+            continue
+        d = e.get("data") or {}
+        out.append(d)
+    return out
+
+
 def build(day):
     dt = datetime.strptime(day, "%Y-%m-%d")
     evs = today_events("", day)          # primary drives the narrative
@@ -147,6 +164,28 @@ def build(day):
         L.append('%s <a href="%s%s">%s</a> · %s' % (emoji, TV, sym, sym, stat))
         L.append(text)
 
+    # side instances often have a looser/different threshold and fire on
+    # a symbol/day the primary narrative above didn't buy — say so
+    # explicitly instead of only reporting a P&L delta with no story
+    side_lines = []
+    for label, esuf, asuf, start in INSTANCES[1:]:
+        entries = side_entries(esuf, day)
+        r = fills_realized(asuf, day)
+        for d in entries:
+            sym = d.get("symbol", "")
+            pnl = r.get(sym)
+            res = ("　结果 <b>%+.0f$</b>" % pnl) if pnl is not None else ""
+            side_lines.append(
+                "· <b>%s</b> 单独下单 <a href=\"%s%s\">%s</a> "
+                "@ %s（%.2fx 量能确认，现役的门槛是 2x）%s"
+                % (label, TV, sym, sym, d.get("entry", "?"),
+                   d.get("ratio", 0) or 0, res))
+    if side_lines:
+        L.append("")
+        L.append("━━━━━━━━")
+        L.append("<b>侧账户单独动作</b>（跟现役门槛不同，可能现役没买这里买了）")
+        L.extend(side_lines)
+
     L.append("")
     L.append("━━━━━━━━")
     L.append("<b>账户（今日 / 累计）</b>")
@@ -156,8 +195,10 @@ def build(day):
             L.append("· %s — 未配置" % label)
             continue
         eq = float(a["equity"])
-        last = float(a.get("last_equity") or eq)
-        dp = eq - last if 0.5 * eq <= last <= 2 * eq else 0.0
+        # equity's own last_equity is only meaningful for the actual
+        # current trading day; for any `day` (including backfills) the
+        # correct "today" P&L is realized fills for that specific day
+        dp = sum(fills_realized(asuf, day).values())
         L.append("· %s　<b>%+.0f$</b> / %+.0f$" % (label, dp, eq - start))
     return "\n".join(L)
 
