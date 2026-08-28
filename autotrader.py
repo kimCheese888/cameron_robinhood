@@ -31,7 +31,10 @@ import scanner
 
 ET = ZoneInfo("America/New_York")
 
-WATCHLIST_SIZE = 4
+WATCHLIST_SIZE = 10        # was 4 — last 10 trading days: 2 of 10 days had
+                           # 7-8 candidates that passed every filter and
+                           # got discarded purely for rank; 10 covers the
+                           # observed max with headroom, no filter loosened
 MAX_ENTRIES_PER_DAY = 4
 SPREAD_MAX = 0.20          # skip books wider than this
 RANGE_MAX_FRAC = 0.10      # skip if opening range > 10% of price
