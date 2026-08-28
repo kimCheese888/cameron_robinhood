@@ -672,17 +672,23 @@ def run_session(day):
             # evidence, not a guess — WFF (8/18) chased to 2.79 while
             # volx2-1.5x got 2.50 same stock same day (+$60 vs -$37), and
             # NBIZ (8/20) same story vs nochase's OR-high fill. If price
-            # has already run more than half the box's own range past the
-            # OR high by the time the volume bar confirms, the location is
-            # gone — same 0.5R cap hod_poll already uses for its pullback
-            # entries, applied here to the breakout entry.
-            box_range = info["hi"] - info["lo"]
-            if not LIVE_NOCHASE and px > info["hi"] + CHASE_MAX_FRAC * box_range:
+            # has already run more than half the trade's actual risk unit
+            # past the OR high by the time the volume bar confirms, the
+            # location is gone.
+            # 2026-08-27 fix: the risk unit here MUST match what sizing
+            # actually uses (min(range, STOP_DIST_MAX)), not the raw box
+            # range — using the raw range let the effective cap drift from
+            # ~0.35R on tight boxes up to ~1.0R on wide ones (PMI/BOXL
+            # both landed in that looser end), backwards from the intent
+            # (wider box = stop already compressed by STOP_DIST_MAX = a
+            # chase does MORE damage to R, should be tighter, not looser).
+            risk_unit = min(info["hi"] - info["lo"], STOP_DIST_MAX)
+            if not LIVE_NOCHASE and px > info["hi"] + CHASE_MAX_FRAC * risk_unit:
                 journal.event("trigger.veto",
                               f"{sym}: confirmed but price {px} already "
                               f"{px - info['hi']:.2f} past OR high "
-                              f"{info['hi']} (>{CHASE_MAX_FRAC:.0%} of box "
-                              f"range {box_range:.2f}) — not chasing, "
+                              f"{info['hi']} (>{CHASE_MAX_FRAC:.0%} of risk "
+                              f"unit {risk_unit:.2f}) — not chasing, "
                               "location is gone", symbol=sym, last=px,
                               or_high=info["hi"], or_low=info["lo"],
                               reason="chase_too_far", ratio=ratio)
