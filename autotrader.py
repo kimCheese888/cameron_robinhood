@@ -36,6 +36,15 @@ WATCHLIST_SIZE = 10        # was 4 — last 10 trading days: 2 of 10 days had
                            # got discarded purely for rank; 10 covers the
                            # observed max with headroom, no filter loosened
 MAX_ENTRIES_PER_DAY = 4
+# T17: the 9:15 scan is one snapshot — names that start gapping afterward
+# (still premarket) are invisible until the open. Concrete gap this closes:
+# AEHL (2026-09-03) alerted Ross's scanner at 9:17 ET, 2 min after our
+# one-shot scan already locked the watchlist — his -$16,600 double-red day
+# traded a stock we structurally couldn't have seen. Re-running the exact
+# same scan a few more times before 9:30 catches that specific 9:15-9:30
+# blind spot with zero new selection logic or entry mechanism.
+PREMARKET_RESCAN_EVERY_S = 240   # re-scan every 4 min
+PREMARKET_RESCAN_LAST_HM = (9, 29)  # stop with 1 min runway before the open
 SPREAD_MAX = 0.20          # skip books wider than this
 RANGE_MAX_FRAC = 0.10      # skip if opening range > 10% of price
 STOP_DIST_MAX = 0.50       # cap risk distance even if range is wider
@@ -107,6 +116,42 @@ def build_watchlist():
             journal.event("rh.error",
                           f"watchlist sync failed: {str(e)[:120]}")
     return picks
+
+
+def premarket_rescan(day, watch):
+    """T17: re-run the same premarket scan a few more times between 9:15
+    and the open, adding any symbol that wasn't there at 9:15 but now
+    qualifies. Same filters, same picks logic as build_watchlist() —
+    no new selection criteria, and new adds get armed at 9:36 through the
+    exact same trigger/veto path as everything else. Mutates and returns
+    `watch` in place."""
+    known = {p["symbol"] for p in watch}
+    while (now_et() < at(day, *PREMARKET_RESCAN_LAST_HM)
+           and len(watch) < WATCHLIST_SIZE):
+        time.sleep(PREMARKET_RESCAN_EVERY_S)
+        if now_et() >= at(day, *PREMARKET_RESCAN_LAST_HM):
+            break
+        try:
+            rows = scanner.scan()
+        except Exception as e:
+            journal.event("rh.error",
+                          f"premarket rescan failed: {str(e)[:100]}")
+            continue
+        for r in sorted(rows, key=lambda x: -x["gap_pct"]):
+            if r["symbol"] in known:
+                continue
+            if r["spread"] != "" and r["spread"] > SPREAD_MAX:
+                continue
+            watch.append(r)
+            known.add(r["symbol"])
+            journal.event("watchlist.rescan_add",
+                          f"{r['symbol']} ${r['price']} gap {r['gap_pct']}% "
+                          f"rvol {r['rvol']} | new since 9:15 scan "
+                          f"(now {now_et():%H:%M} ET)", **r)
+            notify.send(notify.watchlist([r]))
+            if len(watch) >= WATCHLIST_SIZE:
+                break
+    return watch
 
 
 def opening_range(symbol, day):
@@ -421,6 +466,7 @@ def run_session(day):
                       f"position(s) / {len(orders)} open order(s) at the "
                       "broker — supervising them until cutoff")
 
+    watch = premarket_rescan(day, watch)
     sleep_until(at(day, 9, 36))
     armed = {}
     for p in watch:
